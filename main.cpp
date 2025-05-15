@@ -63,11 +63,12 @@ class GraphManager {
   public:
     GraphManager() = default;
     const Node* addNodeAtLevel(size_t lvl);
-    bool connectNodes(ul node1, ul node2);
+    Edge* connectNodes(ul node1, ul node2);
     std::unordered_map<ul, Node*> aggressiveSearch(std::vector<ul> nodesIds) const;
     void dump(std::ostream& os) const;
     void setDepth(size_t d);
     std::vector<ul> getNodesAtLevel(size_t lvl) const;
+    std::vector<ul> getNextNodes(std::vector<ul> nodesIds) const;
   private:
     ul _numberOfNodes = 0;
     std::vector<std::vector<Node*>> _nodesPerLevel = {{}};
@@ -123,11 +124,13 @@ const Node* GraphManager::addNodeAtLevel(size_t lvl) {
   _nodesPerLevel[lvl].push_back(newNode);
   return newNode;
 };
-bool GraphManager::connectNodes(ul node1, ul node2) {
+Edge* GraphManager::connectNodes(ul node1, ul node2) {
   std::unordered_map<ul, Node*> nodes = aggressiveSearch({node1, node2});
-  if (nodes.size() != 2 || !nodes[node1] || !nodes[node2]) return 0;
+  if (nodes.size() != 2 || !nodes[node1] || !nodes[node2]) {
+    return nullptr;
+  }
   for (const auto& inEdge : nodes[node2]->_inEdges) {
-    if (inEdge->_source == nodes[node1]) return 0;
+    if (inEdge->_source == nodes[node1]) return inEdge;
   }
   return new Edge(nodes[node1], nodes[node2]);
 };
@@ -141,10 +144,10 @@ std::unordered_map<ul, Node*> GraphManager::aggressiveSearch(std::vector<ul> nod
                             return nodeId < node->_idx;});
       if (it != nodesIds.end()) {
         rslt[*it] = node;
-        if (rslt.size() == nodesIds.size()) return rslt;
       }
     }
   }
+  // for (auto [ke, val]: rslt) std::cout<<ke<<" "<<val->_idx<<std::endl;
   return rslt;
 };
 void GraphManager::dump(std::ostream& os) const {
@@ -152,11 +155,11 @@ void GraphManager::dump(std::ostream& os) const {
     os << "-- Nodes at level: "<<std::to_string(i)<<" (nbr of nodes: "<<_nodesPerLevel[i].size()<<")"<<std::endl;
     for (size_t j = 0; j < _nodesPerLevel[i].size(); j++) {
       os << "  |_ "<< "\"" << std::to_string(_nodesPerLevel[i][j]->_idx)<<"\" ";
-      if (j < _nodesPerLevel[i].size()-1) {
-        os << " TO [";
-        for (size_t k = 0; k < _nodesPerLevel[i+1].size(); k++) os << "\"" << std::to_string(_nodesPerLevel[i][k]->_idx)<<"\" ";
-        os <<"]";
+      os << " TO [";
+      for (const auto& e : getNextNodes({_nodesPerLevel[i][j]->_idx})) {
+        os << "\"" << std::to_string(e)<<"\" ";
       }
+      os <<"]";
       os <<std::endl;
     }
     os <<std::endl;
@@ -170,4 +173,21 @@ std::vector<ul> GraphManager::getNodesAtLevel(size_t lvl) const {
   std::vector<ul> rslt(_nodesPerLevel[lvl].size());
   for (const auto& node : _nodesPerLevel[lvl]) rslt.push_back(node->_idx);
   return rslt;
+};
+std::vector<ul> GraphManager::getNextNodes(std::vector<ul> nodesIds) const {
+  std::vector<ul> nextNodes;
+  std::unordered_map<ul, Node*> nodes = aggressiveSearch(nodesIds);
+  for(const auto& [id, node]: nodes) {
+    for (const auto& edge : node->_outEdges) {
+      nextNodes.push_back(edge->_target->_idx);
+    }
+  }
+  // std::cout<<"FINDING FOR : ";
+  // for (const auto& e : nodesIds) std::cout<< "\""<<std::to_string(e)<<"\" ";
+  // std::cout<<std::endl;
+  // std::cout<<"\t|_ ";
+  // for (const auto& e : nextNodes) std::cout<< "\""<<std::to_string(e)<<"\" ";
+  // std::cout<<std::endl;
+
+  return nextNodes;
 }

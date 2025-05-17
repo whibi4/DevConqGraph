@@ -171,7 +171,7 @@ void GraphManager::setDepth(size_t d) {
 std::vector<ul> GraphManager::getNodesAtLevel(size_t lvl) const {
   assert(_nodesPerLevel.size() > lvl);
   std::vector<ul> rslt(_nodesPerLevel[lvl].size());
-  for (const auto& node : _nodesPerLevel[lvl]) rslt.push_back(node->_idx);
+  for (size_t i = 0; i <_nodesPerLevel[lvl].size(); i++) rslt[i] = _nodesPerLevel[lvl][i]->_idx;
   return rslt;
 };
 std::vector<ul> GraphManager::getNextNodes(std::vector<ul> nodesIds) const {
@@ -182,12 +182,6 @@ std::vector<ul> GraphManager::getNextNodes(std::vector<ul> nodesIds) const {
       nextNodes.push_back(edge->_target->_idx);
     }
   }
-  // std::cout<<"FINDING FOR : ";
-  // for (const auto& e : nodesIds) std::cout<< "\""<<std::to_string(e)<<"\" ";
-  // std::cout<<std::endl;
-  // std::cout<<"\t|_ ";
-  // for (const auto& e : nextNodes) std::cout<< "\""<<std::to_string(e)<<"\" ";
-  // std::cout<<std::endl;
 
   return nextNodes;
 }

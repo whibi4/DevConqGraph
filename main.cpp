@@ -3,8 +3,11 @@
 #include <type_traits>
 #include <vector>
 #include <unordered_map>
+#include "tbb/concurrent_unordered_map.h"
 #include <unordered_set>
 #include <boost/dynamic_bitset.hpp>
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
 #include <algorithm> 
 #include <queue>
 #include <chrono>
@@ -116,7 +119,9 @@ class GraphManager {
     std::vector<ul> getNodesAtLevel(size_t lvl) const;
     std::vector<ul> getNextNodes(std::vector<ul> nodesIds) const;
     Dependencies getDependencies() const;
+    Dependencies getDependenciesPrll() const;
     Dependencies getDependenciesWithCache() const;
+    Dependencies getDependenciesWithContext() const; //not yet usable
   private:
     ul _numberOfNodes = 0;
     std::vector<std::vector<Node*>> _nodesPerLevel = {{}};
@@ -149,28 +154,33 @@ GraphManager* GraphGenerator(std::vector<size_t> sizePerLvl) {
 GraphManager::Dependencies getDependencies(GraphManager* graphManager) {
   return graphManager->getDependencies();
 }
+GraphManager::Dependencies getDependenciesPrll(GraphManager* graphManager) {
+  return graphManager->getDependenciesPrll();
+}
 GraphManager::Dependencies getDependenciesWithCache(GraphManager* graphManager) {
   return graphManager->getDependenciesWithCache();
 }
 
 int main() {
 
-  size_t numberOfLevels = 3;
-  size_t maxValue = 4;
-  size_t minValue =3;
+  size_t numberOfLevels = 10;
+  size_t maxValue = 20;
+  size_t minValue =15;
   std::vector<size_t> bigExample = Utils::generateRandomVector<size_t>(numberOfLevels, minValue, maxValue);
   std::cout<<"- GRAPH GENERATION:"<<std::endl;
   GraphManager* graphMngr = Utils::measureExecution(GraphGenerator,bigExample);
-  std::cout<<"- GRAPH FULL SEARCH:"<<std::endl;
-  auto dep1 = Utils::measureExecution(getDependencies,graphMngr);
   std::cout<<"- GRAPH FULL SEARCH WITH CACHE:"<<std::endl;
   auto dep2 = Utils::measureExecution(getDependenciesWithCache,graphMngr);
-  if (dep1 == dep2) {
+  std::cout<<"- GRAPH FULL PRLL SEARCH:"<<std::endl;
+  auto dep1 = Utils::measureExecution(getDependenciesPrll,graphMngr);
+  std::cout<<"- GRAPH FULL SEARCH:"<<std::endl;
+  auto dep0 = Utils::measureExecution(getDependencies,graphMngr);
+  if (dep1 == dep2 && dep0 == dep1) {
     std::cout<<"- EQUAL"<<std::endl;
-    
   } else {
-    
     std::cout<<"- NOT EQUAL"<<std::endl;
+    std::cout<<"- DEP0"<<std::endl;
+    Utils::printDependencies(dep0,std::cout);
     std::cout<<"- DEP1"<<std::endl;
     Utils::printDependencies(dep1,std::cout);
     std::cout<<"- DEP2"<<std::endl;
@@ -280,10 +290,34 @@ GraphManager::Dependencies GraphManager::getDependencies() const {
   }
   return deps;
 };
+GraphManager::Dependencies GraphManager::getDependenciesPrll() const {
+  tbb::concurrent_unordered_map<ul, std::unordered_set<ul>> deps;
+
+  auto lambdaSrch = [&](size_t i) {
+    Node* node = _nodesPerLevel[0][i];
+    std::unordered_set<ul> nodeDep;
+    std::queue<Node*> queue({node});
+    while (!queue.empty()) {
+      Node* src = queue.front();
+      queue.pop();
+      if (src->_outEdges.empty()) {
+        nodeDep.emplace(src->_idx);
+      } else {
+        for (auto& edge : src->_outEdges) {
+          Node* trgt = edge->_target;
+          queue.push(trgt);
+        }
+      }
+    }
+    deps[node->_idx] = nodeDep;
+  };
+  tbb::parallel_for(size_t(0), _nodesPerLevel[0].size(), lambdaSrch);
+  return GraphManager::Dependencies(deps.begin(), deps.end());
+};
 GraphManager::Dependencies GraphManager::getDependenciesWithCache() const {
   GraphManager::Dependencies deps;
   std::unordered_map<Node*, std::unordered_set<ul>> depCache;
-  for (size_t lvl= _nodesPerLevel.size() - 2 ; lvl > 0; lvl--) {
+  for (int lvl= _nodesPerLevel.size() - 2 ; lvl >= 0; lvl--) {
     for (size_t n = 0; n < _nodesPerLevel[lvl].size(); n++) {
       const auto& node = _nodesPerLevel[lvl][n];
       std::unordered_set<ul> nodeDep;
@@ -304,5 +338,13 @@ GraphManager::Dependencies GraphManager::getDependenciesWithCache() const {
     }
   }
   return deps;
+};
 
-}
+GraphManager::Dependencies GraphManager::getDependenciesWithContext() const {
+  GraphManager::Dependencies deps;
+  struct Context {
+    std::vector<Node*> _primaryInputs;
+    std::vector<Node*> _primaryOutputs;
+  };
+  return deps;
+};

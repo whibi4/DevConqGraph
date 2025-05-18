@@ -1,0 +1,12 @@
+*.log
+.env
+*.tmp
+*.swp
+.vscode/
+*.code-workspace
+dist/
+build/
+.DS_Store
+Thumbs.db
+devConqGraph
+output.txt

@@ -116,6 +116,7 @@ class GraphManager {
     std::vector<ul> getNodesAtLevel(size_t lvl) const;
     std::vector<ul> getNextNodes(std::vector<ul> nodesIds) const;
     Dependencies getDependencies() const;
+    Dependencies getDependenciesWithCache() const;
   private:
     ul _numberOfNodes = 0;
     std::vector<std::vector<Node*>> _nodesPerLevel = {{}};
@@ -148,17 +149,33 @@ GraphManager* GraphGenerator(std::vector<size_t> sizePerLvl) {
 GraphManager::Dependencies getDependencies(GraphManager* graphManager) {
   return graphManager->getDependencies();
 }
+GraphManager::Dependencies getDependenciesWithCache(GraphManager* graphManager) {
+  return graphManager->getDependenciesWithCache();
+}
 
 int main() {
 
-  size_t numberOfLevels = 10;
-  size_t maxValue = 20;
-  size_t minValue =10;
+  size_t numberOfLevels = 3;
+  size_t maxValue = 4;
+  size_t minValue =3;
   std::vector<size_t> bigExample = Utils::generateRandomVector<size_t>(numberOfLevels, minValue, maxValue);
   std::cout<<"- GRAPH GENERATION:"<<std::endl;
   GraphManager* graphMngr = Utils::measureExecution(GraphGenerator,bigExample);
   std::cout<<"- GRAPH FULL SEARCH:"<<std::endl;
-  Utils::measureExecution(getDependencies,graphMngr);
+  auto dep1 = Utils::measureExecution(getDependencies,graphMngr);
+  std::cout<<"- GRAPH FULL SEARCH WITH CACHE:"<<std::endl;
+  auto dep2 = Utils::measureExecution(getDependenciesWithCache,graphMngr);
+  if (dep1 == dep2) {
+    std::cout<<"- EQUAL"<<std::endl;
+    
+  } else {
+    
+    std::cout<<"- NOT EQUAL"<<std::endl;
+    std::cout<<"- DEP1"<<std::endl;
+    Utils::printDependencies(dep1,std::cout);
+    std::cout<<"- DEP2"<<std::endl;
+    Utils::printDependencies(dep2,std::cout);
+  }
   return 0;
 };
 
@@ -262,4 +279,30 @@ GraphManager::Dependencies GraphManager::getDependencies() const {
     deps[node->_idx] = nodeDep;
   }
   return deps;
+};
+GraphManager::Dependencies GraphManager::getDependenciesWithCache() const {
+  GraphManager::Dependencies deps;
+  std::unordered_map<Node*, std::unordered_set<ul>> depCache;
+  for (size_t lvl= _nodesPerLevel.size() - 2 ; lvl > 0; lvl--) {
+    for (size_t n = 0; n < _nodesPerLevel[lvl].size(); n++) {
+      const auto& node = _nodesPerLevel[lvl][n];
+      std::unordered_set<ul> nodeDep;
+      for (size_t e = 0; e < node->_outEdges.size(); e++) {
+        const auto& edge = node->_outEdges[e];
+        auto it = depCache.find(edge->_target);
+        if (it != depCache.end()) {
+          nodeDep.insert(it->second.begin(), it->second.end());
+        } else {
+          nodeDep.insert(edge->_target->_idx);
+        }
+      }
+      if (lvl == 0) {
+        deps[node->_idx]=nodeDep;
+      } else {
+        depCache[node]=nodeDep;
+      }
+    }
+  }
+  return deps;
+
 }
